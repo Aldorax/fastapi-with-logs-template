@@ -1,48 +1,26 @@
-import uvicorn
 from fastapi import FastAPI
-from starlette.middleware.cors import CORSMiddleware
+from app.middleware.logging_middleware import LoggingMiddleware
+from app.exceptions.handlers import add_exception_handlers
+from app.api.v1.endpoints import items
+from app.core.logging_config import setup_logging
+from app.db.init_db import init_db
+import logging
 
-from app.core.middleware import LoggingMiddleware
-from app.core.settings import app_settings
-from app.core.logging import logger
+setup_logging()
+logger = logging.getLogger("fastapi-logger")
 
+logger.info("Initializing the database")
+init_db()
 
-def get_application() -> FastAPI:
-    application = FastAPI(
-        title=app_settings.PROJECT_NAME,
-        debug=app_settings.DEBUG,
-        version=app_settings.VERSION,
-        docs_url="/api/docs"
-    )
+app = FastAPI()
 
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=app_settings.ALLOWED_HOSTS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    return application
+app.add_middleware(LoggingMiddleware)
+add_exception_handlers(app)
 
-
-app = get_application()
-app.middleware('http')(
-    LoggingMiddleware()
-)
-
-
-@app.get('/')
-async def root():
-    logger.info("Got /")
-    return {"answer": "I am Root"}
-
-
-@app.get('/error')
-async def error(one: int, two: int):
-    """ Example with traceback
-    """
-    logger.info(f"Got /error, {one=}, {two=}")
-    return one / two
+app.include_router(items.router, prefix="/api/v1/items")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8888)
+    import uvicorn
+    logger.info("Starting the server at 0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    logger.info("Server stopped")
